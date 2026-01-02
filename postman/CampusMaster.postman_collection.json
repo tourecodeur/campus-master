@@ -1,0 +1,154 @@
+{
+  "info": {
+    "name": "CampusMaster API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth - Inscription",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/inscription",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "inscription"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"etudiant1@campus.com\",\n  \"motDePasse\": \"Pass1234!\",\n  \"nomComplet\": \"Etudiant Test\",\n  \"role\": \"ETUDIANT\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Auth - Connexion",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/auth/connexion",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "auth",
+            "connexion"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"etudiant1@campus.com\",\n  \"motDePasse\": \"Pass1234!\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Admin - Liste utilisateurs",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/utilisateurs",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "utilisateurs"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Etudiant - Mes cours",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/etudiants/me/cours",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "etudiants",
+            "me",
+            "cours"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Messagerie - Envoyer privé",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/messagerie/me/prive/envoyer?destinataireId=2&contenu=Bonjour",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "messagerie",
+            "me",
+            "prive",
+            "envoyer"
+          ],
+          "query": [
+            {
+              "key": "destinataireId",
+              "value": "2"
+            },
+            {
+              "key": "contenu",
+              "value": "Bonjour"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "token",
+      "value": ""
+    }
+  ]
+}

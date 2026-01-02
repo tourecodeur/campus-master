@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { login } from '@/lib/api'
+import { toUiRole } from '@/lib/api'
 import { useAuthStore } from '@/lib/store'
 import { LogIn, Home, Building, Mail, Lock, AlertCircle } from 'lucide-react'
 
@@ -23,7 +24,7 @@ export default function LoginPage() {
       setLoading(true)
       setError('')
       const response = await login(data.email, data.password)
-      setAuth(response.token, response.user)
+      setAuth(response.token, response.user.role, response.user)
       
       switch(response.user.role) {
         case 'admin':
@@ -35,11 +36,9 @@ export default function LoginPage() {
         case 'enseignant':
           router.push('/enseignant/dashboard')
           break
-        case 'comptable':
-          router.push('/comptable/dashboard')
-          break
+        
         default:
-          router.push('/dashboard')
+          router.push(`/${response.user.role}/dashboard`)
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Email ou mot de passe incorrect')
