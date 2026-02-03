@@ -7,7 +7,6 @@ import CoursForm, { CoursFormData } from '@/components/forms/CoursForm'
 import {
   Plus,
   Search,
-  BookOpen,
   Calendar,
   Edit,
   Trash2,
@@ -16,18 +15,18 @@ import {
   GraduationCap,
 } from 'lucide-react'
 
-import {
+import apiClient, {
   getCours,
   createCours,
   updateCours,
   deleteCours,
   getSemestres,
   getEnseignants,
-  // ✅ nouveaux imports
   getModules,
   createSemestre,
   createModule,
   createMatiere,
+  getMatieres,
 } from '@/lib/api'
 
 type CoursApi = {
@@ -43,12 +42,19 @@ type CoursApi = {
 type Semestre = { id: number; libelle?: string; nom?: string; code?: string; description?: string }
 type Enseignant = { id: number; nomComplet?: string; email?: string; nom?: string; prenom?: string }
 type Module = { id: number; code: string; libelle: string }
+type Matiere = {
+  id: number
+  libelle: string
+  moduleId?: number | null
+  module?: { id: number; code?: string; libelle?: string }
+}
 
 export default function CoursPage() {
   const [cours, setCours] = useState<CoursApi[]>([])
   const [semestres, setSemestres] = useState<Semestre[]>([])
   const [enseignants, setEnseignants] = useState<Enseignant[]>([])
   const [modules, setModules] = useState<Module[]>([])
+  const [matieres, setMatieres] = useState<Matiere[]>([])
 
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
@@ -61,39 +67,63 @@ export default function CoursPage() {
   const [showModuleModal, setShowModuleModal] = useState(false)
   const [showMatiereModal, setShowMatiereModal] = useState(false)
 
+  // ✅ mode édition référentiels
+  const [editingSemestre, setEditingSemestre] = useState<Semestre | null>(null)
+  const [editingModule, setEditingModule] = useState<Module | null>(null)
+  const [editingMatiere, setEditingMatiere] = useState<Matiere | null>(null)
+
   // ✅ form states
   const [semestreForm, setSemestreForm] = useState({ code: '', description: '' })
   const [moduleForm, setModuleForm] = useState({ code: '', libelle: '' })
   const [matiereForm, setMatiereForm] = useState({ libelle: '', moduleId: 0 })
 
+  // ===================== LOAD =====================
+
+  const loadAll = async () => {
+    try {
+      setLoading(true)
+      const [coursData, semestresData, enseignantsData, modulesData, matieresData] = await Promise.all([
+        getCours(),
+        getSemestres(),
+        getEnseignants(),
+        getModules(),
+        getMatieres(),
+      ])
+      setCours(coursData ?? [])
+      setSemestres(semestresData ?? [])
+      setEnseignants(enseignantsData ?? [])
+      setModules(modulesData ?? [])
+      setMatieres(matieresData ?? [])
+    } catch (e) {
+      console.error('Erreur load:', e)
+      alert("Impossible de charger les données (cours/semestres/enseignants/modules/matières). Vérifie le backend + token.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   useEffect(() => {
-    ;(async () => {
-      try {
-        setLoading(true)
-        const [coursData, semestresData, enseignantsData, modulesData] = await Promise.all([
-          getCours(),
-          getSemestres(),
-          getEnseignants(),
-          getModules(),
-        ])
-        setCours(coursData ?? [])
-        setSemestres(semestresData ?? [])
-        setEnseignants(enseignantsData ?? [])
-        setModules(modulesData ?? [])
-      } catch (e) {
-        console.error('Erreur load:', e)
-        alert("Impossible de charger les données (cours/semestres/enseignants/modules). Vérifie le backend + token.")
-      } finally {
-        setLoading(false)
-      }
-    })()
+    loadAll()
   }, [])
+
+  const loadCoursOnly = async () => {
+    const data = await getCours()
+    setCours(data ?? [])
+  }
+
+  const reloadRefs = async () => {
+    const [s, m, mat] = await Promise.all([getSemestres(), getModules(), getMatieres()])
+    setSemestres(s ?? [])
+    setModules(m ?? [])
+    setMatieres(mat ?? [])
+  }
+
+  // ===================== LABEL MAPS =====================
 
   const semestreLabelById = useMemo(() => {
     const map = new Map<number, string>()
-    semestres.forEach((s: Semestre) => {
-      // ✅ on privilégie code (backend)
-      const label = s.code || s.libelle || s.nom || `Semestre #${s.id}`
+    semestres.forEach((s) => {
+      const label = s.code || s.libelle || s.nom || `Semestre ${s.id}`
       map.set(s.id, label)
     })
     return map
@@ -101,7 +131,7 @@ export default function CoursPage() {
 
   const enseignantLabelById = useMemo(() => {
     const map = new Map<number, string>()
-    enseignants.forEach((u: Enseignant) => {
+    enseignants.forEach((u) => {
       const label =
         u.nomComplet ||
         `${u.prenom ?? ''} ${u.nom ?? ''}`.trim() ||
@@ -112,16 +142,13 @@ export default function CoursPage() {
     return map
   }, [enseignants])
 
-  const loadCoursOnly = async () => {
-    const data = await getCours()
-    setCours(data ?? [])
-  }
+  const moduleLabelById = useMemo(() => {
+    const map = new Map<number, string>()
+    modules.forEach((m) => map.set(m.id, `${m.code} — ${m.libelle}`))
+    return map
+  }, [modules])
 
-  const reloadRefs = async () => {
-    const [s, m] = await Promise.all([getSemestres(), getModules()])
-    setSemestres(s ?? [])
-    setModules(m ?? [])
-  }
+  // ===================== CRUD COURS =====================
 
   const handleCreate = () => {
     setSelectedCours(null)
@@ -154,26 +181,73 @@ export default function CoursPage() {
       setShowModal(false)
       await loadCoursOnly()
     } catch (e) {
-      console.error("Erreur enregistrement:", e)
+      console.error('Erreur enregistrement:', e)
       alert("Erreur lors de l'enregistrement. Vérifie que le backend accepte le payload.")
     }
   }
 
-  // ===================== CRUD Référentiels =====================
+  // ===================== CRUD Référentiels (sans api.ts) =====================
+
+  // --- SEMESTRE ---
+  const openCreateSemestre = () => {
+    setEditingSemestre(null)
+    setSemestreForm({ code: '', description: '' })
+    setShowSemestreModal(true)
+  }
+
+  const openEditSemestre = (s: Semestre) => {
+    setEditingSemestre(s)
+    setSemestreForm({ code: s.code ?? '', description: s.description ?? '' })
+    setShowSemestreModal(true)
+  }
 
   const submitSemestre = async () => {
     const code = semestreForm.code.trim()
     if (!code) return alert('Code semestre requis (ex: S1, S2)')
     try {
-      await createSemestre({ code, description: semestreForm.description.trim() || undefined })
+      if (editingSemestre) {
+        await apiClient.put(`/api/v1/semestres/${editingSemestre.id}`, {
+          code,
+          description: semestreForm.description.trim() || undefined,
+        })
+        alert('Semestre modifié ✅')
+      } else {
+        await createSemestre({ code, description: semestreForm.description.trim() || undefined })
+        alert('Semestre ajouté ✅')
+      }
       setShowSemestreModal(false)
+      setEditingSemestre(null)
       setSemestreForm({ code: '', description: '' })
       await reloadRefs()
-      alert('Semestre ajouté ✅')
     } catch (e: any) {
       console.error(e)
-      alert(e?.response?.data?.message || e?.message || "Erreur création semestre")
+      alert(e?.response?.data?.message || e?.message || 'Erreur enregistrement semestre')
     }
+  }
+
+  const onDeleteSemestre = async (id: number) => {
+    if (!confirm('Supprimer ce semestre ?')) return
+    try {
+      await apiClient.delete(`/api/v1/semestres/${id}`)
+      await reloadRefs()
+      alert('Semestre supprimé ✅')
+    } catch (e: any) {
+      console.error(e)
+      alert(e?.response?.data?.message || e?.message || 'Erreur suppression semestre')
+    }
+  }
+
+  // --- MODULE ---
+  const openCreateModule = () => {
+    setEditingModule(null)
+    setModuleForm({ code: '', libelle: '' })
+    setShowModuleModal(true)
+  }
+
+  const openEditModule = (m: Module) => {
+    setEditingModule(m)
+    setModuleForm({ code: m.code ?? '', libelle: m.libelle ?? '' })
+    setShowModuleModal(true)
   }
 
   const submitModule = async () => {
@@ -182,35 +256,89 @@ export default function CoursPage() {
     if (!code) return alert('Code module requis (ex: M1)')
     if (!libelle) return alert('Libellé module requis')
     try {
-      await createModule({ code, libelle })
+      if (editingModule) {
+        await apiClient.put(`/api/v1/modules/${editingModule.id}`, { code, libelle })
+        alert('Module modifié ✅')
+      } else {
+        await createModule({ code, libelle })
+        alert('Module ajouté ✅')
+      }
       setShowModuleModal(false)
+      setEditingModule(null)
       setModuleForm({ code: '', libelle: '' })
       await reloadRefs()
-      alert('Module ajouté ✅')
     } catch (e: any) {
       console.error(e)
-      alert(e?.response?.data?.message || e?.message || "Erreur création module")
+      alert(e?.response?.data?.message || e?.message || 'Erreur enregistrement module')
     }
+  }
+
+  const onDeleteModule = async (id: number) => {
+    if (!confirm('Supprimer ce module ?')) return
+    try {
+      await apiClient.delete(`/api/v1/modules/${id}`)
+      await reloadRefs()
+      alert('Module supprimé ✅')
+    } catch (e: any) {
+      console.error(e)
+      alert(e?.response?.data?.message || e?.message || 'Erreur suppression module')
+    }
+  }
+
+  // --- MATIERE ---
+  const openCreateMatiere = () => {
+    setEditingMatiere(null)
+    setMatiereForm({ libelle: '', moduleId: 0 })
+    setShowMatiereModal(true)
+  }
+
+  const openEditMatiere = (x: Matiere) => {
+    setEditingMatiere(x)
+    const mid = x.moduleId ?? x.module?.id
+    setMatiereForm({ libelle: x.libelle ?? '', moduleId: mid ? Number(mid) : 0 })
+    setShowMatiereModal(true)
   }
 
   const submitMatiere = async () => {
     const libelle = matiereForm.libelle.trim()
     if (!libelle) return alert('Libellé matière requis')
+    const moduleId = matiereForm.moduleId ? Number(matiereForm.moduleId) : null
     try {
-      await createMatiere({ libelle, moduleId: matiereForm.moduleId ? Number(matiereForm.moduleId) : null })
+      if (editingMatiere) {
+        await apiClient.put(`/api/v1/matieres/${editingMatiere.id}`, { libelle, moduleId })
+        alert('Matière modifiée ✅')
+      } else {
+        await createMatiere({ libelle, moduleId })
+        alert('Matière ajoutée ✅')
+      }
       setShowMatiereModal(false)
+      setEditingMatiere(null)
       setMatiereForm({ libelle: '', moduleId: 0 })
-      alert('Matière ajoutée ✅')
+      await reloadRefs()
     } catch (e: any) {
       console.error(e)
-      alert(e?.response?.data?.message || e?.message || "Erreur création matière")
+      alert(e?.response?.data?.message || e?.message || 'Erreur enregistrement matière')
     }
   }
+
+  const onDeleteMatiere = async (id: number) => {
+    if (!confirm('Supprimer cette matière ?')) return
+    try {
+      await apiClient.delete(`/api/v1/matieres/${id}`)
+      await reloadRefs()
+      alert('Matière supprimée ✅')
+    } catch (e: any) {
+      console.error(e)
+      alert(e?.response?.data?.message || e?.message || 'Erreur suppression matière')
+    }
+  }
+
+  // ===================== FILTERS =====================
 
   const filteredCours = useMemo(() => {
     const q = search.toLowerCase().trim()
     if (!q) return cours
-    return cours.filter((c: CoursApi) => {
+    return cours.filter((c) => {
       const titre = (c.titre ?? '').toLowerCase()
       const desc = (c.description ?? '').toLowerCase()
 
@@ -229,6 +357,35 @@ export default function CoursPage() {
     })
   }, [cours, search, semestreLabelById, enseignantLabelById])
 
+  const filteredSemestres = useMemo(() => {
+    const q = search.toLowerCase().trim()
+    if (!q) return semestres
+    return semestres.filter((s) => {
+      const label = (s.code || s.libelle || s.nom || '').toLowerCase()
+      const desc = (s.description || '').toLowerCase()
+      return label.includes(q) || desc.includes(q)
+    })
+  }, [semestres, search])
+
+  const filteredModules = useMemo(() => {
+    const q = search.toLowerCase().trim()
+    if (!q) return modules
+    return modules.filter((m) => (`${m.code} ${m.libelle}`.toLowerCase().includes(q)))
+  }, [modules, search])
+
+  const filteredMatieres = useMemo(() => {
+    const q = search.toLowerCase().trim()
+    if (!q) return matieres
+    return matieres.filter((x) => {
+      const lib = (x.libelle || '').toLowerCase()
+      const mid = x.moduleId ?? x.module?.id
+      const modLabel = mid ? (moduleLabelById.get(Number(mid)) ?? '').toLowerCase() : ''
+      return lib.includes(q) || modLabel.includes(q)
+    })
+  }, [matieres, search, moduleLabelById])
+
+  // ===================== UI =====================
+
   if (loading) {
     return (
       <DashboardLayout role="admin">
@@ -245,13 +402,15 @@ export default function CoursPage() {
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-800">Gestion des Cours</h1>
-            <p className="text-gray-600 mt-1">{filteredCours.length} cours trouvé(s)</p>
+            <p className="text-gray-600 mt-1">
+              {filteredCours.length} cours • {filteredSemestres.length} semestres • {filteredModules.length} modules •{' '}
+              {filteredMatieres.length} matières
+            </p>
           </div>
 
-          {/* ✅ nouveaux boutons */}
           <div className="flex flex-wrap gap-2 justify-end">
             <button
-              onClick={() => setShowSemestreModal(true)}
+              onClick={openCreateSemestre}
               className="px-4 py-3 rounded-lg border border-gray-300 hover:bg-gray-50 transition flex items-center font-medium"
             >
               <Calendar className="w-5 h-5 mr-2 text-purple-600" />
@@ -259,7 +418,7 @@ export default function CoursPage() {
             </button>
 
             <button
-              onClick={() => setShowModuleModal(true)}
+              onClick={openCreateModule}
               className="px-4 py-3 rounded-lg border border-gray-300 hover:bg-gray-50 transition flex items-center font-medium"
             >
               <Layers className="w-5 h-5 mr-2 text-indigo-600" />
@@ -267,7 +426,7 @@ export default function CoursPage() {
             </button>
 
             <button
-              onClick={() => setShowMatiereModal(true)}
+              onClick={openCreateMatiere}
               className="px-4 py-3 rounded-lg border border-gray-300 hover:bg-gray-50 transition flex items-center font-medium"
             >
               <GraduationCap className="w-5 h-5 mr-2 text-emerald-600" />
@@ -289,7 +448,7 @@ export default function CoursPage() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
-              placeholder="Rechercher par titre, description, semestre, enseignant..."
+              placeholder="Rechercher (cours / semestres / modules / matières)..."
               value={search}
               onChange={(e: any) => setSearch(e.target.value)}
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -297,8 +456,163 @@ export default function CoursPage() {
           </div>
         </div>
 
+        {/* ✅ LISTES RÉFÉRENTIELS */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Semestres */}
+          <div className="bg-white rounded-xl shadow-md overflow-hidden">
+            <div className="p-5 border-b flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-purple-600" />
+                <h2 className="text-lg font-bold text-gray-800">Semestres</h2>
+              </div>
+              <span className="text-sm text-gray-500">{filteredSemestres.length}</span>
+            </div>
+            <div className="p-5 space-y-2 max-h-[320px] overflow-auto">
+              {filteredSemestres.length ? (
+                filteredSemestres.map((s) => (
+                  <div key={s.id} className="rounded-lg border p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-semibold text-gray-800">
+                          {s.code || s.libelle || s.nom || `Semestre ${s.id}`}
+                        </div>
+                        {s.description ? (
+                          <div className="text-sm text-gray-600">{s.description}</div>
+                        ) : (
+                          <div className="text-sm text-gray-400 italic">Aucune description</div>
+                        )}
+                      </div>
+
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => openEditSemestre(s)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                          title="Modifier"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => onDeleteSemestre(s.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* <div className="mt-2 text-xs text-gray-500">#{s.id}</div> */}
+                  </div>
+                ))
+              ) : (
+                <div className="text-gray-500 italic">Aucun semestre</div>
+              )}
+            </div>
+          </div>
+
+          {/* Modules */}
+          <div className="bg-white rounded-xl shadow-md overflow-hidden">
+            <div className="p-5 border-b flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Layers className="w-5 h-5 text-indigo-600" />
+                <h2 className="text-lg font-bold text-gray-800">Modules</h2>
+              </div>
+              <span className="text-sm text-gray-500">{filteredModules.length}</span>
+            </div>
+            <div className="p-5 space-y-2 max-h-[320px] overflow-auto">
+              {filteredModules.length ? (
+                filteredModules.map((m) => (
+                  <div key={m.id} className="rounded-lg border p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="font-semibold text-gray-800">
+                        {m.code} — {m.libelle}
+                      </div>
+
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => openEditModule(m)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                          title="Modifier"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => onDeleteModule(m.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                          title="Supprimer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* <div className="mt-2 text-xs text-gray-500">#{m.id}</div> */}
+                  </div>
+                ))
+              ) : (
+                <div className="text-gray-500 italic">Aucun module</div>
+              )}
+            </div>
+          </div>
+
+          {/* Matières */}
+          <div className="bg-white rounded-xl shadow-md overflow-hidden">
+            <div className="p-5 border-b flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <GraduationCap className="w-5 h-5 text-emerald-600" />
+                <h2 className="text-lg font-bold text-gray-800">Matières</h2>
+              </div>
+              <span className="text-sm text-gray-500">{filteredMatieres.length}</span>
+            </div>
+            <div className="p-5 space-y-2 max-h-[320px] overflow-auto">
+              {filteredMatieres.length ? (
+                filteredMatieres.map((x) => {
+                  const mid = x.moduleId ?? x.module?.id
+                  const moduleLabel = mid ? moduleLabelById.get(Number(mid)) : undefined
+                  return (
+                    <div key={x.id} className="rounded-lg border p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="font-semibold text-gray-800">{x.libelle}</div>
+                          {moduleLabel ? (
+                            <div className="text-sm text-gray-600">Module: {moduleLabel}</div>
+                          ) : (
+                            <div className="text-sm text-gray-400 italic">Module: —</div>
+                          )}
+                        </div>
+
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => openEditMatiere(x)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                            title="Modifier"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => onDeleteMatiere(x.id)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                            title="Supprimer"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* <div className="mt-2 text-xs text-gray-500">#{x.id}</div> */}
+                    </div>
+                  )
+                })
+              ) : (
+                <div className="text-gray-500 italic">Aucune matière</div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ==================== LISTE DES COURS ==================== */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {filteredCours.map((c: CoursApi) => {
+          {filteredCours.map((c) => {
             const sid = c.semestreId ?? c.semestre?.id
             const eid = c.enseignantId ?? c.enseignant?.id
 
@@ -311,7 +625,6 @@ export default function CoursPage() {
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <h3 className="text-xl font-bold text-gray-800">{c.titre}</h3>
-                      <p className="text-sm text-gray-600">ID: {c.id}</p>
                     </div>
                     <div className="flex space-x-2">
                       <button
@@ -348,11 +661,6 @@ export default function CoursPage() {
                       <span className="font-medium mr-2">Enseignant :</span>
                       <span>{enseignantLabel}</span>
                     </div>
-                    <div className="flex items-center text-sm text-gray-700">
-                      <BookOpen className="w-4 h-4 mr-2 text-green-500" />
-                      <span className="font-medium mr-2">Type :</span>
-                      <span>Cours</span>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -375,8 +683,11 @@ export default function CoursPage() {
         {/* ==================== Modal Semestre ==================== */}
         <Modal
           isOpen={showSemestreModal}
-          onClose={() => setShowSemestreModal(false)}
-          title="Ajouter un semestre"
+          onClose={() => {
+            setShowSemestreModal(false)
+            setEditingSemestre(null)
+          }}
+          title={editingSemestre ? 'Modifier le semestre' : 'Ajouter un semestre'}
           size="md"
         >
           <div className="space-y-4">
@@ -402,7 +713,10 @@ export default function CoursPage() {
 
             <div className="flex justify-end gap-2 pt-2">
               <button
-                onClick={() => setShowSemestreModal(false)}
+                onClick={() => {
+                  setShowSemestreModal(false)
+                  setEditingSemestre(null)
+                }}
                 className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50"
               >
                 Annuler
@@ -411,7 +725,7 @@ export default function CoursPage() {
                 onClick={submitSemestre}
                 className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
               >
-                Enregistrer
+                {editingSemestre ? 'Modifier' : 'Enregistrer'}
               </button>
             </div>
           </div>
@@ -420,8 +734,11 @@ export default function CoursPage() {
         {/* ==================== Modal Module ==================== */}
         <Modal
           isOpen={showModuleModal}
-          onClose={() => setShowModuleModal(false)}
-          title="Ajouter un module"
+          onClose={() => {
+            setShowModuleModal(false)
+            setEditingModule(null)
+          }}
+          title={editingModule ? 'Modifier le module' : 'Ajouter un module'}
           size="md"
         >
           <div className="space-y-4">
@@ -446,7 +763,10 @@ export default function CoursPage() {
 
             <div className="flex justify-end gap-2 pt-2">
               <button
-                onClick={() => setShowModuleModal(false)}
+                onClick={() => {
+                  setShowModuleModal(false)
+                  setEditingModule(null)
+                }}
                 className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50"
               >
                 Annuler
@@ -455,7 +775,7 @@ export default function CoursPage() {
                 onClick={submitModule}
                 className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
               >
-                Enregistrer
+                {editingModule ? 'Modifier' : 'Enregistrer'}
               </button>
             </div>
           </div>
@@ -464,8 +784,11 @@ export default function CoursPage() {
         {/* ==================== Modal Matière ==================== */}
         <Modal
           isOpen={showMatiereModal}
-          onClose={() => setShowMatiereModal(false)}
-          title="Ajouter une matière"
+          onClose={() => {
+            setShowMatiereModal(false)
+            setEditingMatiere(null)
+          }}
+          title={editingMatiere ? 'Modifier la matière' : 'Ajouter une matière'}
           size="md"
         >
           <div className="space-y-4">
@@ -497,7 +820,10 @@ export default function CoursPage() {
 
             <div className="flex justify-end gap-2 pt-2">
               <button
-                onClick={() => setShowMatiereModal(false)}
+                onClick={() => {
+                  setShowMatiereModal(false)
+                  setEditingMatiere(null)
+                }}
                 className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50"
               >
                 Annuler
@@ -506,7 +832,7 @@ export default function CoursPage() {
                 onClick={submitMatiere}
                 className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700"
               >
-                Enregistrer
+                {editingMatiere ? 'Modifier' : 'Enregistrer'}
               </button>
             </div>
           </div>

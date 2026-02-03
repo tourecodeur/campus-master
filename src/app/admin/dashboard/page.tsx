@@ -57,14 +57,14 @@ export default function AdminDashboard() {
       trend: '+5%',
       trendUp: true 
     },
-    { 
-      title: 'Revenus', 
-      value: `${stats.totalRevenu.toLocaleString()} FCFA`, 
-      icon: DollarSign, 
-      color: 'bg-yellow-500',
-      trend: '+18%',
-      trendUp: true 
-    },
+    // { 
+    //   title: 'Revenus', 
+    //   value: `${stats.totalRevenu.toLocaleString()} FCFA`, 
+    //   icon: DollarSign, 
+    //   color: 'bg-yellow-500',
+    //   trend: '+18%',
+    //   trendUp: true 
+    // },
     { 
       title: 'Cours', 
       value: stats.totalCours, 
@@ -93,7 +93,7 @@ export default function AdminDashboard() {
           <p className="text-gray-600 mt-1">Vue d'ensemble de la plateforme</p>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
           {cards.map((card, index) => (
             <div key={index} className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition">
               <div className="flex items-center justify-between mb-4">
@@ -111,7 +111,7 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           <div className="bg-white rounded-xl shadow-md p-6">
             <h2 className="text-xl font-semibold mb-4 flex items-center">
               <TrendingUp className="w-5 h-5 mr-2 text-blue-600" />
@@ -143,7 +143,7 @@ export default function AdminDashboard() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </div>
+        </div> */}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl shadow-md p-6">

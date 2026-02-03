@@ -19,6 +19,8 @@ type SupportCours = {
   description?: string
   urlFichier?: string
   coursId?: number
+  type: string
+  nomFichier?: string
 }
 
 type FormState = {
@@ -42,11 +44,34 @@ export default function AdminDocumentsPage() {
     coursId: '',
   })
 
+  // ✅ Normalisation Backend -> Frontend (sans toucher api.ts)
+  const normalizeSupport = (d: any): SupportCours => {
+    const id = Number(d?.id)
+    const titre = String(d?.titre ?? d?.nomFichier ?? '')
+    const description = typeof d?.description === 'string' ? d.description : undefined
+    const urlFichier = typeof d?.urlFichier === 'string' ? d.urlFichier : undefined
+
+    // coursId peut venir de d.coursId ou d.cours.id selon backend
+    const coursIdRaw = d?.coursId ?? d?.cours?.id
+    const coursId = coursIdRaw !== undefined && coursIdRaw !== null ? Number(coursIdRaw) : undefined
+
+    // ⚠️ fix principal: type toujours présent
+    const type = String(d?.type ?? 'cours')
+
+    const nomFichier =
+      typeof d?.nomFichier === 'string'
+        ? d.nomFichier
+        : (typeof d?.titre === 'string' ? d.titre : undefined)
+
+    return { id, titre, description, urlFichier, coursId, type, nomFichier }
+  }
+
   const load = async () => {
     try {
       setLoading(true)
       const data = await getSupportsCours()
-      setItems(Array.isArray(data) ? data : [])
+      const normalized = Array.isArray(data) ? data.map(normalizeSupport) : []
+      setItems(normalized)
     } catch (e) {
       console.error(e)
       alert("Erreur lors du chargement des documents (vérifie token/rôle/endpoints).")
@@ -67,6 +92,7 @@ export default function AdminDocumentsPage() {
         (d.titre || '').toLowerCase().includes(q) ||
         (d.description || '').toLowerCase().includes(q) ||
         (d.urlFichier || '').toLowerCase().includes(q) ||
+        (d.type || '').toLowerCase().includes(q) ||
         String(d.id).includes(q)
       )
     })
@@ -97,7 +123,6 @@ export default function AdminDocumentsPage() {
     }
 
     if (!payload.titre) return alert('Titre requis')
-    // urlFichier optionnel mais conseillé
     if (form.coursId !== '') payload.coursId = Number(form.coursId)
 
     try {
@@ -159,7 +184,7 @@ export default function AdminDocumentsPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Rechercher par titre/description/url/id..."
+              placeholder="Rechercher par titre/description/url/type/id..."
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
@@ -171,11 +196,11 @@ export default function AdminDocumentsPage() {
               <div className="p-6">
                 <div className="flex justify-between items-start mb-3">
                   <div>
-                    <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
                       <FileText className="w-5 h-5 text-blue-600" />
                       {d.titre}
-                    </h3>
-                    <p className="text-sm text-gray-500">ID #{d.id}</p>
+                    </h2>
+                    <p className="text-sm text-gray-500">{d.type}</p>
                   </div>
 
                   <div className="flex gap-2">
@@ -196,11 +221,11 @@ export default function AdminDocumentsPage() {
                   </div>
                 </div>
 
-                {d.description ? (
+                {/* {d.description ? (
                   <p className="text-gray-700 mb-4">{d.description}</p>
                 ) : (
                   <p className="text-gray-400 italic mb-4">Aucune description</p>
-                )}
+                )} */}
 
                 <div className="flex items-center justify-between border-t pt-4 text-sm text-gray-600">
                   <span className="text-gray-500">Cours: {d.coursId ?? '-'}</span>
@@ -279,9 +304,7 @@ export default function AdminDocumentsPage() {
               <Button variant="outline" onClick={() => setShowModal(false)}>
                 Annuler
               </Button>
-              <Button onClick={onSubmit}>
-                {editing ? 'Modifier' : 'Créer'}
-              </Button>
+              <Button onClick={onSubmit}>{editing ? 'Modifier' : 'Créer'}</Button>
             </div>
           </div>
         </Modal>

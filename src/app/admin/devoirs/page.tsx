@@ -175,7 +175,7 @@ export default function AdminDevoirsPage() {
                       <FileText className="w-5 h-5 text-blue-600" />
                       {d.titre}
                     </h3>
-                    <p className="text-sm text-gray-500">ID #{d.id}</p>
+                    {/* <p className="text-sm text-gray-500">ID #{d.id}</p> */}
                   </div>
 
                   <div className="flex gap-2">
