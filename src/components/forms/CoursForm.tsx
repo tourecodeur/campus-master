@@ -1,19 +1,25 @@
 'use client'
+
+import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Save, X } from 'lucide-react'
 import Button from '@/components/ui/Button'
+import { getSemestres, getEnseignants } from '@/lib/api'
 
-interface CoursFormData {
+type Semestre = { id: number; libelle?: string; nom?: string; code?: string }
+type Enseignant = {
+  id: number
+  nomComplet?: string
+  email?: string
+  nom?: string
+  prenom?: string
+}
+
+export interface CoursFormData {
   titre: string
-  code: string
-  description: string
-  enseignantId: string
-  niveau: string
-  semestre: string
-  credits: number
-  heures: number
-  salle: string
-  statut: string
+  description?: string
+  semestreId: number
+  enseignantId: number
 }
 
 interface CoursFormProps {
@@ -23,175 +29,141 @@ interface CoursFormProps {
 }
 
 export default function CoursForm({ initialData, onSubmit, onCancel }: CoursFormProps) {
-  const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<CoursFormData>({
-    defaultValues: initialData || {
-      credits: 3,
-      heures: 36,
-      semestre: 'S1',
-      niveau: 'L1',
-      statut: 'actif'
-    }
-  })
+  const [semestres, setSemestres] = useState<Semestre[]>([])
+  const [enseignants, setEnseignants] = useState<Enseignant[]>([])
+  const [loadingRefs, setLoadingRefs] = useState(true)
 
-  const enseignants = [
-    { id: '1', nom: 'Dr. Diallo Amadou' },
-    { id: '2', nom: 'Prof. Ndiaye Fatou' },
-    { id: '3', nom: 'Dr. Sow Moussa' },
-    { id: '4', nom: 'M. Diop Cheikh' },
-    { id: '5', nom: 'Prof. Fall Aïcha' },
-  ]
+  const defaultValues = useMemo(() => {
+    const semestreId = Number(initialData?.semestreId ?? initialData?.semestre?.id ?? 0)
+    const enseignantId = Number(initialData?.enseignantId ?? initialData?.enseignant?.id ?? 0)
+    return {
+      titre: initialData?.titre ?? '',
+      description: initialData?.description ?? '',
+      semestreId: Number.isFinite(semestreId) ? semestreId : 0,
+      enseignantId: Number.isFinite(enseignantId) ? enseignantId : 0,
+    } as CoursFormData
+  }, [initialData])
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm<CoursFormData>({ defaultValues })
+
+  useEffect(() => {
+    setValue('titre', defaultValues.titre)
+    setValue('description', defaultValues.description ?? '')
+    setValue('semestreId', defaultValues.semestreId)
+    setValue('enseignantId', defaultValues.enseignantId)
+  }, [defaultValues, setValue])
+
+  useEffect(() => {
+    ;(async () => {
+      try {
+        setLoadingRefs(true)
+        const [s, e] = await Promise.all([getSemestres(), getEnseignants()])
+        setSemestres((s ?? []) as any)
+        setEnseignants((e ?? []) as any)
+      } catch (err) {
+        console.error('Erreur chargement semestres/enseignants:', err)
+      } finally {
+        setLoadingRefs(false)
+      }
+    })()
+  }, [])
+
+  const semestreLabel = (s: Semestre) => s.libelle || s.nom || s.code || `Semestre #${s.id}`
+  const enseignantLabel = (u: Enseignant) =>
+    u.nomComplet || `${u.prenom ?? ''} ${u.nom ?? ''}`.trim() || u.email || `Enseignant #${u.id}`
+
+  const onValid = (data: CoursFormData) => {
+    const payload: CoursFormData = {
+      titre: String(data.titre ?? '').trim(),
+      description: String(data.description ?? '').trim(),
+      semestreId: Number(data.semestreId),
+      enseignantId: Number(data.enseignantId),
+    }
+
+    if (!payload.titre) return alert('Titre requis')
+    if (!payload.semestreId) return alert('Semestre requis')
+    if (!payload.enseignantId) return alert('Enseignant requis')
+
+    onSubmit(payload)
+  }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Code *</label>
-          <input
-            {...register('code', { required: 'Code requis' })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="ALG101"
-          />
-          {errors.code && <p className="text-red-500 text-xs mt-1">{errors.code.message}</p>}
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Titre *</label>
-          <input
-            {...register('titre', { required: 'Titre requis' })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="Algorithmique"
-          />
-          {errors.titre && <p className="text-red-500 text-xs mt-1">{errors.titre.message}</p>}
-        </div>
+    <form onSubmit={handleSubmit(onValid)} className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Titre *</label>
+        <input
+          {...register('titre', { required: 'Titre requis' })}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          placeholder="Réseaux"
+        />
+        {errors.titre && <p className="text-red-500 text-xs mt-1">{errors.titre.message}</p>}
       </div>
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
         <textarea
           {...register('description')}
-          rows={3}
+          rows={4}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          placeholder="Description du cours..."
+          placeholder="Intro TCP/IP..."
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Semestre *</label>
+          <select
+            {...register('semestreId', {
+              required: 'Semestre requis',
+              valueAsNumber: true,
+              validate: (v) => (!!v ? true : 'Semestre requis'),
+            })}
+            disabled={loadingRefs}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+          >
+            <option value={0}>Sélectionnez un semestre</option>
+            {semestres.map((s) => (
+              <option key={s.id} value={s.id}>
+                {semestreLabel(s)}
+              </option>
+            ))}
+          </select>
+          {errors.semestreId && <p className="text-red-500 text-xs mt-1">{errors.semestreId.message}</p>}
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Enseignant *</label>
           <select
-            {...register('enseignantId', { required: 'Enseignant requis' })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            {...register('enseignantId', {
+              required: 'Enseignant requis',
+              valueAsNumber: true,
+              validate: (v) => (!!v ? true : 'Enseignant requis'),
+            })}
+            disabled={loadingRefs}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
           >
-            <option value="">Sélectionnez un enseignant</option>
-            {enseignants.map((enseignant) => (
-              <option key={enseignant.id} value={enseignant.id}>
-                {enseignant.nom}
+            <option value={0}>Sélectionnez un enseignant</option>
+            {enseignants.map((u) => (
+              <option key={u.id} value={u.id}>
+                {enseignantLabel(u)}
               </option>
             ))}
           </select>
           {errors.enseignantId && <p className="text-red-500 text-xs mt-1">{errors.enseignantId.message}</p>}
         </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Niveau</label>
-          <select
-            {...register('niveau')}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="L1">Licence 1</option>
-            <option value="L2">Licence 2</option>
-            <option value="L3">Licence 3</option>
-            <option value="M1">Master 1</option>
-            <option value="M2">Master 2</option>
-          </select>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Semestre</label>
-          <select
-            {...register('semestre')}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="S1">Semestre 1</option>
-            <option value="S2">Semestre 2</option>
-            <option value="S3">Semestre 3</option>
-            <option value="S4">Semestre 4</option>
-            <option value="S5">Semestre 5</option>
-            <option value="S6">Semestre 6</option>
-          </select>
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Crédits</label>
-          <input
-            type="number"
-            min="1"
-            max="6"
-            {...register('credits', { 
-              required: 'Crédits requis',
-              min: { value: 1, message: 'Minimum 1 crédit' },
-              max: { value: 6, message: 'Maximum 6 crédits' }
-            })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          {errors.credits && <p className="text-red-500 text-xs mt-1">{errors.credits.message}</p>}
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Heures</label>
-          <input
-            type="number"
-            min="1"
-            max="120"
-            {...register('heures', { 
-              required: 'Heures requises',
-              min: { value: 1, message: 'Minimum 1 heure' },
-              max: { value: 120, message: 'Maximum 120 heures' }
-            })}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          {errors.heures && <p className="text-red-500 text-xs mt-1">{errors.heures.message}</p>}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Salle</label>
-          <input
-            {...register('salle')}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            placeholder="A201, Lab Info, etc."
-          />
-        </div>
-        
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
-          <select
-            {...register('statut')}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="actif">Actif</option>
-            <option value="inactif">Inactif</option>
-            <option value="en attente">En attente</option>
-          </select>
-        </div>
       </div>
 
       <div className="flex justify-end space-x-3 pt-4">
-        <Button
-          type="button"
-          onClick={onCancel}
-          variant="outline"
-        >
+        <Button type="button" onClick={onCancel} variant="outline">
           <X className="w-4 h-4 mr-2" />
           Annuler
         </Button>
-        <Button
-          type="submit"
-          disabled={isSubmitting}
-        >
+        <Button type="submit" disabled={isSubmitting || loadingRefs}>
           <Save className="w-4 h-4 mr-2" />
           {isSubmitting ? 'Enregistrement...' : initialData ? 'Modifier' : 'Créer'}
         </Button>

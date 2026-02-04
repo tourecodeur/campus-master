@@ -1,122 +1,83 @@
 'use client'
 
-import { useState } from 'react'
-import { X, Bell } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import Modal from '@/components/ui/Modal'
+import Button from '@/components/ui/Button'
+import { Plus } from 'lucide-react'
 
-interface NewAnnouncementModalProps {
-  isOpen: boolean
-  onClose: () => void
-  courseId: number
-  onAnnouncementCreated: () => void
+export type NewAnnouncementPayload = {
+  titre: string
+  contenu: string
 }
 
-export default function NewAnnouncementModal({
-  isOpen,
-  onClose,
-  courseId,
-  onAnnouncementCreated
-}: NewAnnouncementModalProps) {
-  const [formData, setFormData] = useState({
-    title: '',
-    content: '',
-    isImportant: false
-  })
-  const [isSubmitting, setIsSubmitting] = useState(false)
+type Props = {
+  isOpen: boolean
+  onClose: () => void
+  coursId: number | null
+  onSubmit: (payload: NewAnnouncementPayload) => Promise<void> | void
+}
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-    
-    // Simulation d'envoi
-    await new Promise(resolve => setTimeout(resolve, 800))
-    
-    console.log('Announcement created:', { ...formData, courseId })
-    onAnnouncementCreated()
-    onClose()
-    setFormData({ title: '', content: '', isImportant: false })
-    setIsSubmitting(false)
+export default function NewAnnouncementModal({ isOpen, onClose, coursId, onSubmit }: Props) {
+  const [titre, setTitre] = useState('')
+  const [contenu, setContenu] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (isOpen) {
+      setTitre('')
+      setContenu('')
+      setLoading(false)
+    }
+  }, [isOpen])
+
+  const canSubmit = useMemo(() => !!coursId && titre.trim() && contenu.trim(), [coursId, titre, contenu])
+
+  const handleSubmit = async () => {
+    if (!coursId) return
+    if (!canSubmit) return
+    setLoading(true)
+    try {
+      await onSubmit({ titre: titre.trim(), contenu: contenu.trim() })
+      onClose()
+    } finally {
+      setLoading(false)
+    }
   }
 
-  if (!isOpen) return null
-
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-lg w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b">
-          <div className="flex items-center">
-            <Bell className="w-5 h-5 mr-2 text-yellow-600" />
-            <h2 className="text-xl font-semibold text-gray-800">Nouvelle annonce</h2>
+    <Modal isOpen={isOpen} onClose={onClose} title="Nouvelle annonce" size="lg">
+      <div className="space-y-4">
+        {!coursId && (
+          <div className="p-3 rounded-lg bg-yellow-50 text-yellow-800 text-sm">
+            Sélectionnez un cours avant de publier une annonce.
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-gray-100 rounded-lg"
-          >
-            <X className="w-5 h-5" />
-          </button>
+        )}
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Titre *</label>
+          <input value={titre} onChange={(e) => setTitre(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6">
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Titre de l'annonce *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Ex: Devoir N°1 publié"
-              />
-            </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Contenu *</label>
+          <textarea
+            value={contenu}
+            onChange={(e) => setContenu(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            rows={5}
+          />
+        </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Contenu de l'annonce *
-              </label>
-              <textarea
-                required
-                value={formData.content}
-                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                rows={4}
-                placeholder="Contenu détaillé de l'annonce..."
-              />
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="important"
-                checked={formData.isImportant}
-                onChange={(e) => setFormData({ ...formData, isImportant: e.target.checked })}
-                className="w-4 h-4 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500"
-              />
-              <label htmlFor="important" className="ml-2 text-sm text-gray-700">
-                Marquer comme annonce importante
-              </label>
-            </div>
-          </div>
-
-          <div className="flex justify-end space-x-3 mt-8">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-            >
-              Annuler
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSubmitting ? 'Publication...' : 'Publier l\'annonce'}
-            </button>
-          </div>
-        </form>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={onClose} disabled={loading}>
+            Annuler
+          </Button>
+          <Button onClick={handleSubmit} disabled={!canSubmit || loading}>
+            <Plus className="w-4 h-4 mr-2" />
+            {loading ? 'Publication...' : 'Publier'}
+          </Button>
+        </div>
       </div>
-    </div>
+    </Modal>
   )
 }

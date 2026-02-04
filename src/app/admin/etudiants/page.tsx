@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import DashboardLayout from '@/components/layouts/DashboardLayout'
 import { getEtudiants, deleteEtudiant, createEtudiant, updateEtudiant } from '@/lib/api'
-import { Plus, Search, Edit, Trash2, Eye, Download, Filter } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, Eye } from 'lucide-react'
 import Modal from '@/components/ui/Modal'
 import EtudiantForm from '@/components/forms/EtudiantForm'
 
@@ -12,8 +12,6 @@ interface Etudiant {
   nom: string;
   prenom: string;
   email: string;
-  telephone: string;
-  niveau: string;
   statut: string;
 }
 
@@ -23,7 +21,6 @@ export default function EtudiantsPage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [selectedEtudiant, setSelectedEtudiant] = useState<Etudiant | null>(null)
-  const [filterNiveau, setFilterNiveau] = useState('all')
 
   useEffect(() => {
     loadEtudiants()
@@ -82,10 +79,8 @@ export default function EtudiantsPage() {
       e.prenom?.toLowerCase().includes(search.toLowerCase()) ||
       e.matricule?.toLowerCase().includes(search.toLowerCase()) ||
       e.email?.toLowerCase().includes(search.toLowerCase())
-    
-    const matchFilter = filterNiveau === 'all' || e.niveau === filterNiveau
-    
-    return matchSearch && matchFilter
+
+    return matchSearch
   })
 
   if (loading) {
@@ -116,8 +111,8 @@ export default function EtudiantsPage() {
         </div>
 
         <div className="bg-white rounded-xl shadow-md p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
+          <div className="grid grid-cols-1 gap-4">
+            <div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
@@ -127,23 +122,6 @@ export default function EtudiantsPage() {
                   onChange={(e) => setSearch(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
-              </div>
-            </div>
-            <div>
-              <div className="relative">
-                <Filter className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <select
-                  value={filterNiveau}
-                  onChange={(e) => setFilterNiveau(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white"
-                >
-                  <option value="all">Tous les niveaux</option>
-                  <option value="L1">Licence 1</option>
-                  <option value="L2">Licence 2</option>
-                  <option value="L3">Licence 3</option>
-                  <option value="M1">Master 1</option>
-                  <option value="M2">Master 2</option>
-                </select>
               </div>
             </div>
           </div>
@@ -157,8 +135,6 @@ export default function EtudiantsPage() {
                   <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">Matricule</th>
                   <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">Nom & Prénom</th>
                   <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">Email</th>
-                  <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">Téléphone</th>
-                  <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">Niveau</th>
                   <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">Statut</th>
                   <th className="py-4 px-6 text-left text-sm font-semibold text-gray-700">Actions</th>
                 </tr>
@@ -169,12 +145,6 @@ export default function EtudiantsPage() {
                     <td className="py-4 px-6">{etudiant.matricule}</td>
                     <td className="py-4 px-6">{etudiant.nom} {etudiant.prenom}</td>
                     <td className="py-4 px-6">{etudiant.email}</td>
-                    <td className="py-4 px-6">{etudiant.telephone}</td>
-                    <td className="py-4 px-6">
-                      <span className="px-3 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
-                        {etudiant.niveau}
-                      </span>
-                    </td>
                     <td className="py-4 px-6">
                       <span className={`px-3 py-1 text-xs rounded-full ${
                         etudiant.statut === 'actif' 
